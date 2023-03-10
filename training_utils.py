@@ -16,7 +16,8 @@ import sys
 import glob
 import shutil
 import random
-from data_generator import DataGenerator, DataGeneratorMaskLabel
+from data.data_generator import DataGenerator, DataGeneratorMaskLabel, DataGeneratorAutoEncoder
+from data.augmentor import Augmentor
 from tqdm import tqdm
 from typing import List, Tuple, Dict, Union, Optional
 
@@ -34,15 +35,15 @@ def create_model_directory(model_name:str, model_dir:str="models/")->str:
         print("Model directory already exists")
     return model_path
 
-class Augmentor:
-    """Class used for augmentations"""
-    def __init__(self):
-        pass # TODO: Implement augmentation
-    def ___call__(self, x,y):
-        return (x,y)
-    @property
-    def augmentations(self)->List:
-        return []
+# class Augmentor:
+#     """Class used for augmentations"""
+#     def __init__(self):
+#         pass # TODO: Implement augmentation
+#     def ___call__(self, x,y):
+#         return (x,y)
+#     @property
+#     def augmentations(self)->List:
+#         return []
 
 class Trainer:
     """
@@ -54,20 +55,23 @@ class Trainer:
                 epochs:int=1,
                 model_path:str=None,
                 optimizer:Optimizer=None,
+                loss_fn:str=None,
                 train_generator:DataGenerator=None,
                 val_generator:DataGenerator=None,
                 test_generator:DataGenerator=None,
-                augmentor:Augmentor=None,
+                augmentor:"Augmentor"=None,
                 save_interval:int=1,
                 metrics:List[str]=None,
                 save_metric:str = "val_loss",
-                tensorboard_callback:tb=None,):
+                tensorboard_callback:tb=None,
+                callbacks:List=None):
         self.model = model
         assert model_path is not None, f"Model path must be specified! Got '{model_path}'."
         assert train_generator is not None, f"Training generator must be specified! Got '{train_generator}'."
         self.train_generator = train_generator
         self.batch_size = self.train_generator.batch_size
         self.optimizer = optimizer
+        self.loss_fn = loss_fn
         self.val_generator = val_generator
         self.test_generator = test_generator
         self.augmentor = augmentor
@@ -79,10 +83,15 @@ class Trainer:
         self.metrics = metrics
         self.save_metric = save_metric
         self.save_interval = save_interval
+        self._callbacks = callbacks
         if tensorboard_callback is not None:
             self.tensorboard_callback = tensorboard_callback
         else:
             self._initialize_tensorboard()
+        self._initialize_checkpoint()
+        self.compile_model()
+    def compile_model(self):
+        self.model.compile(optimizer=self.optimizer, loss=self.loss_fn, metrics=self.metrics)
     def _initialize_directories(self):
         if not os.path.exists(self.model_path):
             os.makedirs(self.model_path)
@@ -109,14 +118,14 @@ class Trainer:
             self.val_writer = tf.summary.create_file_writer(os.path.join(log_dir, "val"))
         if self.test_generator is not None:
             self.test_writer = tf.summary.create_file_writer(os.path.join(log_dir, "test"))
-    def _initialize_Checkpoint(self):
+    def _initialize_checkpoint(self):
         """Initialize checkpoint callback"""
         filepath = self._save_path()
         self.checkpoint_callback = keras.callbacks.ModelCheckpoint(filepath, monitor=self.save_metric, save_best_only=False, save_weights_only=False, mode='auto', save_freq=int(self._save_intervals()))
     @property
     def callbacks(self)->List:
         """Return the callbacks"""
-        return [self.tensorboard_callback, self.checkpoint_callback]
+        return self._callbacks+[self.tensorboard_callback, self.checkpoint_callback]
     def _write_tensorboard(self, writer, logs:Dict):
         """Write the logs to tensorboard"""
         with writer.as_default():
@@ -128,7 +137,7 @@ class Trainer:
         os.system(f"tensorboard --logdir={log_dir}")
     def _save_path(self):
         """Return the path to save the model"""
-        return self.model_path + "/weights/epoch_{epoch:02d}_"+self.model_name
+        return self.model_path + "/weights/epoch_{epoch:02d}/"
     def save_model(self, model_name:str=None,best:bool=False):
         """Save the model"""
         if model_name is None:
@@ -160,9 +169,10 @@ class ClassifierTrainer(Trainer):
                 save_interval:int=1,
                 metrics:List[str]=None,
                 save_metric:str="val_loss",
-                tensorboard_callback:tb=None,):
-        super().__init__(model, epochs, model_path, optimizer, train_generator, val_generator, test_generator, augmentor, save_interval, metrics,save_metric,tensorboard_callback)
-    def train_classifier(self):
+                tensorboard_callback:tb=None,
+                **kwargs):
+        super().__init__(model, epochs, model_path, optimizer, train_generator, val_generator, test_generator, augmentor, save_interval, metrics,save_metric,tensorboard_callback,**kwargs)
+    def train(self):
         n_classes = 4
         batches = len(self.train_generator)
         t1_label = tf.one_hot(np.repeat(0, self.train_generator.batch_size), n_classes)
@@ -207,7 +217,7 @@ class ClassifierTrainer(Trainer):
             self.epoch += 1
             print(f"Epoch: {epoch + 1:2d}. Average accuracy - Training: {ave_train_acc:.3e}, Validation: {np.mean(validating_loss):.3e}")
         self.save_model()
-    def test_classifier(self):
+    def test(self):
         """Test the model on the test data"""
         testing_loss = []
         n_classes = 4
@@ -232,46 +242,22 @@ class AutoEncoderTrainer(Trainer):
                 epochs:int=1,
                 model_path:str=None,
                 optimizer:Optimizer=None,
-                train_generator:DataGeneratorMaskLabel=None,
-                val_generator:DataGeneratorMaskLabel=None,
-                test_generator:DataGeneratorMaskLabel=None,
+                loss_fn:str="binary_crossentropy",
+                train_generator:DataGeneratorAutoEncoder=None,
+                val_generator:DataGeneratorAutoEncoder=None,
+                test_generator:DataGeneratorAutoEncoder=None,
                 augmentor:Augmentor=None,
                 save_interval:int=1,
                 metrics:List[str]=None,
                 save_metric:str="val_loss",
-                tensorboard_callback:tb=None,):
-        super().__init__(model, epochs, model_path, optimizer, train_generator, val_generator, test_generator, augmentor, save_interval,metrics,save_metric, tensorboard_callback)
-    def train_autoencoder(self):
-        call_backs = self.callbacks
-        history = self.model.fit(self.train_generator, epochs=self.epochs, validation_data=self.val_generator, callbacks=call_backs)
+                tensorboard_callback:tb=None,
+                **kwargs):
+        super().__init__(model, epochs, model_path, optimizer, loss_fn, train_generator, val_generator, test_generator, augmentor, save_interval,metrics,save_metric, tensorboard_callback, **kwargs)
+    def train(self):
+        self.compile_model()
+        # Open tensorboard
+        history = self.model.fit(self.train_generator, epochs=self.epochs, validation_data=self.val_generator, callbacks=self.callbacks)
         return history
-
-        # batches = len(self.train_generator)
-        # for epoch in range(1,self.epochs+1):
-        #     training_loss = [] # Track loss per epoch.
-        #     validating_loss = []
-        #     pbar = tqdm(enumerate(self.train_generator)) # Progess bar to make it less boring, and trackable.
-        #     # Training data
-        #     for idx, (t1, t1ce,t2,flair) in pbar:
-        #         if (idx+1)%10==0:
-        #             pbar.set_description(f"Training Epoch {epoch}/{self.epochs}. {idx+1}/{batches} Batch. Training Loss: {h[0]:.3e}")
-        #         images = np.concatenate((t1, t1ce, t2, flair), axis=0)
-        #         h = self.model.train_on_batch(images, images)
-        #         training_loss.append(h)
-                
-        #     train_vals = np.array(training_loss) # Convert to numpy for faster computation.
-        #     ave_train_loss = train_vals[:,0].mean() # Get average loss and accuracy over the epoch.
-        #     with self.train_writer.as_default():
-        #         tf.summary.scalar("loss", ave_train_loss, step=self.epoch)
-        #     pbar.set_description(f"Training Epoch {epoch+1}/{self.epochs}. {idx+1}/{batches} Batches. Training Loss: {ave_train_loss:.3e}")
-        #     # Validation data
-        #     for idx, (t1, t1ce,t2,flair) in enumerate(self.val_generator):
-        #         images = np.concatenate((t1, t1ce, t2, flair), axis=0)
-        #         validating_loss.append(self.model.test_on_batch(images, images)[-1])
-        #     val_acc = np.mean(validating_loss)
-        #     if val_acc > self.best_val_acc:
-        #         self.best_val_acc = val_acc
-
 
 if __name__ == "__main__":
     # Create the trainer

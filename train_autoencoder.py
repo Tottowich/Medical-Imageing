@@ -8,7 +8,17 @@ from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.preprocessing.image import load_img
 from tensorflow.keras.utils import to_categorical
 import tensorflow.keras as keras
-from data_generator import DataGenerator, DataGeneratorAutoEncoder
+from data.data_generator import DataGenerator, DataGeneratorAutoEncoder, DataGeneratorMaskLabel
+from data.augmentor import Augmentor
+from archs.segmentation.unet import build_unet
+from training_utils import AutoEncoderTrainer
+# Learning rate schedule
+from tensorflow.keras.callbacks import LearningRateScheduler
+# Adaptive learning rate
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+# Metrics
+from tensorflow.keras.metrics import MeanIoU
+
 import matplotlib.pyplot as plt
 if __name__=="__main__":
     gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -23,14 +33,13 @@ if __name__=="__main__":
     gen_dir = "data/"  # Change if you have copied the data locally on your machine
     array_labels = ['t1', 't1ce', 't2', 'flair']  # Available arrays are: 't1', 't1ce', 't2', 'flair', 'mask'.
     N_CLASSES = len(array_labels)
-    batch_size = 16
-
+    batch_size = 8
+    import absl.logging
+    absl.logging.set_verbosity(absl.logging.ERROR)
+    augmentor = Augmentor()
     gen_train = DataGeneratorAutoEncoder(data_path=gen_dir + 'training',
                             arrays=array_labels,
-                            batch_size=batch_size)
-    # gen_train = DataGenerator(data_path=gen_dir + 'training',
-    #                         arrays=array_labels,
-    #                         batch_size=batch_size)
+                            batch_size=batch_size,augmentor=augmentor)
     gen_val = DataGeneratorAutoEncoder(data_path=gen_dir + 'validating',
                             arrays=array_labels,
                             batch_size=batch_size)
@@ -41,16 +50,6 @@ if __name__=="__main__":
     print(f"Number of samples in training set: {gen_train.n_samples}")
     print(f"Number of samples in validation set: {gen_val.n_samples}")
     print(f"Number of samples in testing set: {gen_test.n_samples}")
-    # imgs = gen_train[0]
-    # for inp in range(np.shape(imgs)[0]):
-    #     plt.figure(figsize=(12,5))
-    #     for i in range(4):
-    #         plt.subplot(1, 4, i + 1)
-    #         plt.imshow(imgs[inp][i, :, :, 0], cmap='gray')# Rainbow
-    #         plt.title('Image size: ' + str(np.shape(imgs[inp][i, :, :, 0])))
-    #         plt.tight_layout()
-    #     plt.suptitle('Array: ' + gen_train.arrays[inp])
-    #     plt.show()
     # NOTE: What arrays are you using? Their order will be the same as their unpacking order during training!
     # NOTE: What batch size are you using? Should you use more? Or less?
     # NOTE: Are you using the correct generators for the correct task? Training for training and validating for validating?
@@ -59,4 +58,72 @@ if __name__=="__main__":
         print('y shape: ',np.shape(y))
         if idx==0:
             break
+    H = 256
+    W = 256
+    C = 1
+    # Training parameters
+    EPOCHS = 20
+    MODEL_PATH = "models/"
+    NAME = "unet_autoencoder_deeper"
+    initial_learning_rate = 0.005
+    optimizer = keras.optimizers.Adam(learning_rate=initial_learning_rate)
+    loss = "mse"
+    metrics = ["mse"]
+    save_metric = "val_loss"
+    save_best_only = False
+    save_interval = 15
+    scheduler = ReduceLROnPlateau(monitor=save_metric, factor=0.1, patience=3, verbose=1, mode='auto', min_delta=0.00001)
+
     
+    # Model parameters
+    input_shape = (H,W,C)
+    num_classes = C # Number of classes is equal to the number of channels in the output
+    filters = [8,16,32,64,128,256]
+    kernel_size = 3
+    strides = 1
+    padding = "same"
+    activation = "relu"
+    drop_rate_encoder = [0.01,0.2,0.2,0.1,0]
+    drop_rate_decoder = [0.0,0.0,0]
+    depth_encoder = [3,3,4,5]
+    depth_decoder = [3,2,1,1,0]
+    output_depth = 3
+    output_activation = "sigmoid"
+
+    unet = build_unet(
+        input_shape=input_shape,
+        num_classes=num_classes,
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        activation=activation,
+        depth_encoder=depth_encoder,
+        depth_decoder=depth_decoder,
+        drop_rate_encoder=drop_rate_encoder,
+        drop_rate_decoder=drop_rate_decoder,
+        output_depth=output_depth,
+        output_activation=output_activation,
+    )
+    unet.summary()
+    
+    trainer = AutoEncoderTrainer(
+        model=unet,
+        epochs=EPOCHS,
+        model_path=MODEL_PATH+NAME,
+        optimizer=optimizer,
+        loss_fn=loss,
+        train_generator=gen_train,
+        val_generator=gen_val,
+        test_generator=gen_test,
+        metrics=metrics,
+        save_metric=save_metric,
+        save_interval=save_interval,
+        callbacks=[scheduler],)
+    gen_train.plot_examples(2)
+    gen_val.plot_examples(2)
+    trainer.train()
+
+
+
+
