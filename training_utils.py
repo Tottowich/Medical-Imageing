@@ -2,10 +2,10 @@
 
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as keras
-from tensorflow.keras import backend as K
-from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.optimizers import Optimizer
+from tensorflow import keras
+from keras import backend as K
+from keras.models import Model, Sequential
+from keras.optimizers import Optimizer
 import tensorboard as tb
 import sklearn.metrics as skm
 import matplotlib.pyplot as plt

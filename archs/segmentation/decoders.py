@@ -6,20 +6,20 @@
 
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.keras import backend as K
-from tensorflow.keras.models import Model, Sequential
+from keras import backend as K
+from keras.models import Model, Sequential
 # Model specific imports
-from tensorflow.keras.layers import Layer
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Concatenate, BatchNormalization, \
+from keras.layers import Layer
+from keras.layers import Input, Conv2D, MaxPooling2D, Concatenate, BatchNormalization, \
                                     Activation, Dropout, Dense,Flatten, SpatialDropout2D, UpSampling2D, \
                                     Conv2DTranspose,Add
 # Attention imports
-from tensorflow.keras.layers import Attention, MultiHeadAttention
+from keras.layers import Attention, MultiHeadAttention
 # Other imports
 import numpy as np
 from typing import List, Tuple, Dict, Union, Optional
 # Plot model
-from tensorflow.keras.utils import plot_model
+from keras.utils import plot_model
 from .model_utils import ResidualConcatenation, ResidualLinearBlock, ResidualConvBlock, ResidualBlock
 
 
