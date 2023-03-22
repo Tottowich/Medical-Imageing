@@ -1,13 +1,14 @@
 from archs.segmentation.encoder import build_encoder#, initialize_encoder
 from archs.segmentation.decoders import build_decoder#, initialize_decoder
+from tensorflow import keras
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
 
 config = ConfigProto()
 config.gpu_options.allow_growth = True
 session = InteractiveSession(config=config)
-from tensorflow.keras.layers import Input
-from tensorflow.keras.models import Model
+from keras.layers import Input
+from keras.models import Model
 # Plot model
 # from tensorflow.keras.utils import plot_model
 from typing import List, Tuple, Dict, Union, Optional
@@ -22,6 +23,8 @@ def build_unet(
     padding: str,
     activation: str,
     depth_encoder: List[int],
+    decoder_type: str, # "concat", "add", "noskip"
+    upsample_type: str, # "transposed", "bilinear", "nearest", "cubic"
     depth_decoder: List[int],
     drop_rate_encoder: List[float],
     drop_rate_decoder: List[float],
@@ -40,6 +43,8 @@ def build_unet(
     )
     x = Input(shape=input_shape)
     encoder_outputs = encoder(x)
+    # for enc in encoder_outputs:
+    #     print(enc.shape)
     decoder = build_decoder(
         encoder_outputs=encoder_outputs,
         num_classes=num_classes,
@@ -52,6 +57,8 @@ def build_unet(
         output_depth=output_depth,
         output_activation=output_activation,
         drop_rate=drop_rate_decoder,
+        decoder_type=decoder_type,
+        upsample_type=upsample_type,
     )
     y = decoder(encoder_outputs[::-1])
     unet = Model(inputs=x, outputs=y)
