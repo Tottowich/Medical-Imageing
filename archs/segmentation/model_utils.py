@@ -19,8 +19,6 @@ class NestedLayer(Sequential):
         config = super(NestedLayer, self).get_config()
         return config
 
-
-
 class ResidualConcatenation(Model):
     """Residual concatenation wrapper layer"""
     def __init__(self, fn,**kwargs):
@@ -110,3 +108,5 @@ class ResidualBlock(Sequential):
         config = super(ResidualBlock, self).get_config()
         config.update({'blocks': self.blocks})
         return config
+    
+
