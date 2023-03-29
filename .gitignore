@@ -3,3 +3,6 @@ models/*
 #data/*
 data_zip/*
 theodorjonsson_tuner/*
+data/training/*
+data/testing/*
+data/validating/*
