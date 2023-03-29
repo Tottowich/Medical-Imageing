@@ -135,7 +135,7 @@ class ResidualEncoderBuilder:
         self.padding = self.padding + [self.padding[-1]]*(len(self.filters)-len(self.padding))
         self.activation = self.activation + [self.activation[-1]]*(len(self.filters)-len(self.activation))
         self.depth = self.depth + [self.depth[-1]]*(len(self.filters)-len(self.depth))
-        self.drop_rate = self.drop_rate + [self.drop_rate[-1]]*(len(self.filters)-len(self.drop_rate))
+        self.drop_rate = self.drop_rate + [self.drop_rate[-1]]*(len(self.filters))
 
 def build_encoder(input_shape:Tuple[int, int, int],
                 filters:List[int],

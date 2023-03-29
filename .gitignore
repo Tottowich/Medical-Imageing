@@ -2,3 +2,4 @@ venv/*
 models/*
 #data/*
 data_zip/*
+theodorjonsson_tuner/*
