@@ -136,7 +136,9 @@ class ResidualEncoderBuilder:
         self.activation = self.activation + [self.activation[-1]]*(len(self.filters)-len(self.activation))
         self.depth = self.depth + [self.depth[-1]]*(len(self.filters)-len(self.depth))
         self.drop_rate = self.drop_rate + [self.drop_rate[-1]]*(len(self.filters))
-
+        # Check that the lists have the same length
+        print(f"Filters: {len(self.filters)}, kernel_size: {len(self.kernel_size)}, strides: {len(self.strides)}, padding: {len(self.padding)}, activation: {len(self.activation)}, depth: {len(self.depth)}, drop_rate: {len(self.drop_rate)}")
+        assert len(self.filters) == len(self.kernel_size) == len(self.strides) == len(self.padding) == len(self.activation) == len(self.depth) == len(self.drop_rate), "The parameters must be lists of same length"
 def build_encoder(input_shape:Tuple[int, int, int],
                 filters:List[int],
                 kernel_size:int=3, 
